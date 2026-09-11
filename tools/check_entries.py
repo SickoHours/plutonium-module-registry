@@ -22,7 +22,8 @@ Steps, each a row in the JSON report on stdout (exit 1 on any failure):
    under ``history``; an entry present in the base and absent now is reported (removals go
    through NOTICE.md and are named in the pull request).
 5. A listing may claim ``snapshot verified`` only when this run's baseline on that snapshot is
-   ``passed``; any other claim of that status is a problem.
+   ``passed``; any other claim of that status is a problem, including a run started with
+   ``--no-baseline``, where there is no outcome to claim.
 
 Nothing here executes anything from a snapshot: it reads JSON files, hashes and compares them.
 """
@@ -134,7 +135,9 @@ def main() -> int:
     ap.add_argument("--registry", default="registry.json")
     ap.add_argument("--all", action="store_true", help="prove every entry, not only the changed ones")
     ap.add_argument("--no-fetch", action="store_true", help="validate and diff only; do not download snapshots")
-    ap.add_argument("--no-baseline", action="store_true", help="fetch and compare, but skip the toolkit's static baseline on each snapshot")
+    ap.add_argument("--no-baseline", action="store_true",
+                    help="fetch and compare, but skip the toolkit's static baseline on each snapshot; an entry claiming "
+                         "'snapshot verified' then fails, because that claim is a baseline that passed in this run")
     args = ap.parse_args()
     path = (ROOT / args.registry).resolve()
     current = load(path.read_text(encoding="utf-8"))
@@ -176,7 +179,15 @@ def main() -> int:
                     row["ok"] = not problems
             report["steps"].append(row)
             report["ok"] &= row["ok"]
-            if not fetched.get("ok") or args.no_baseline:
+            if not fetched.get("ok"):
+                continue
+            if args.no_baseline:
+                # The invariant holds whether or not the scan ran: what a listing may call
+                # `snapshot verified` is a baseline that passed in this run, and there is none.
+                if (entry.get("verification") or {}).get("snapshot_status", "unverified") == "snapshot verified":
+                    row["problems"] = list(row.get("problems") or []) + ["snapshot verified needs a baseline that passed; this run skipped it"]
+                    row["ok"] = False
+                    report["ok"] = False
                 continue
             scan_root, scope = baseline_root(entry, Path(fetched["result"]["module_dir"]))
             row["baseline_scope"] = scope
@@ -211,7 +222,13 @@ def baseline_root(entry: dict, module_dir: Path) -> tuple[Path, str]:
     members = []
     try:
         declared = json.loads((module_dir / "composition.json").read_text(encoding="utf-8"))
-        members = [m for m in declared.get("modules", []) if isinstance(m, str)]
+        # A member is a relative path, or an object carrying one: {"path": ..., "role": "base"} and
+        # {"name": ..., "commit": ..., "path": ...} are both in the format. Reading only the string
+        # form would leave a sibling member outside the scan, and the baseline would then report it
+        # as a path escape -- refusing a pack that is perfectly well formed.
+        members = [m if isinstance(m, str) else m.get("path")
+                   for m in declared.get("modules", []) if isinstance(m, (str, dict))]
+        members = [m for m in members if isinstance(m, str) and m]
     except (OSError, ValueError):
         return module_dir, "pack directory (its members could not be read)"
     root = module_dir.resolve()

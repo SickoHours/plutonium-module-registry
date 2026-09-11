@@ -126,6 +126,20 @@ class BaselineScopeTests(unittest.TestCase):
             self.assertIn("members", scope)
             self.assertNotEqual(scanned.resolve(), root.resolve(), "and not the whole repository")
 
+    def test_a_member_written_as_an_object_is_still_a_member(self):
+        # Review finding: the format allows {"path": ..., "role": "base"} and a pinned
+        # {"name", "commit", "path"}. Reading only the string form left a sibling member outside the
+        # scan, and the baseline would then call it a path escape and refuse a well-formed pack.
+        with tempfile.TemporaryDirectory() as temp:
+            root, pack = self.tree(temp)
+            (pack / "composition.json").write_text(json.dumps({"modules": [
+                {"path": "../hello-zm", "role": "base"},
+                {"name": "someone/two", "commit": "b" * 40, "path": "../hello-zm-two"}]}), encoding="utf-8")
+            e = entry(kind="composition", path="examples/hello-pack")
+            scanned, scope = check.baseline_root(e, pack)
+            self.assertEqual(scanned.resolve(), (root / "examples").resolve())
+            self.assertIn("members", scope)
+
     def test_a_pack_whose_members_are_references_or_unreadable_stays_in_its_own_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             _, pack = self.tree(temp)
