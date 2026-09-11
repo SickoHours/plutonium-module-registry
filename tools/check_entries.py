@@ -207,7 +207,10 @@ def baseline_row(entry: dict, scanned: dict) -> dict:
                 "unreadable": result.get("unreadable", []), "not_a_security_audit": True})
     problems = []
     if outcome in ("needs-fixes", "incomplete") or row["blocked"]:
-        problems.append(f"baseline outcome {outcome}: " + "; ".join(f"{f.get('id')} at {f.get('file')}" for f in result.get("findings", []) if f.get("blocking")) or f"baseline outcome {outcome}")
+        # `incomplete` has no blocking finding to name (the scan could not read part of the tree),
+        # so the outcome has to stand on its own rather than trail an empty list after a colon.
+        blocking = "; ".join(f"{f.get('id')} at {f.get('file')}" for f in result.get("findings", []) if f.get("blocking"))
+        problems.append(f"baseline outcome {outcome}: {blocking}" if blocking else f"baseline outcome {outcome}")
     claimed = (entry.get("verification") or {}).get("snapshot_status", "unverified")
     if claimed == "snapshot verified" and outcome != "passed":
         problems.append(f"the listing claims snapshot verified but the baseline is {outcome}")

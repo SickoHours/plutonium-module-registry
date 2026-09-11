@@ -108,7 +108,10 @@ class BaselineRowTests(unittest.TestCase):
         row = check.baseline_row(e, blocked)
         self.assertFalse(row["ok"]); self.assertIn("native-plugin at bin/hook.dll", row["problems"][0])
         incomplete = dict(passed, result=dict(passed["result"], outcome="incomplete", blocked=True, unreadable=["x"]))
-        self.assertFalse(check.baseline_row(e, incomplete)["ok"])
+        row = check.baseline_row(e, incomplete)
+        self.assertFalse(row["ok"])
+        # An outcome with nothing blocking to name says so plainly: no colon trailing an empty list.
+        self.assertEqual(row["problems"], ["baseline outcome incomplete"])
         failed = {"ok": False, "error_code": "input_limit", "message": "too big"}
         row = check.baseline_row(e, failed)
         self.assertFalse(row["ok"]); self.assertEqual(row["error_code"], "input_limit")

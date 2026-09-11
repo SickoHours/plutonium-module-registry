@@ -28,7 +28,7 @@ concurrency:
 env:
   # The Plutonium Agent Toolkit commit whose validators and fetch route this registry is checked with.
   TOOLKIT_REPOSITORY: SickoHours/plutonium-agent-toolkit
-  TOOLKIT_COMMIT: 62663a309770508561a0e7f0c7fa1cd1bef21af8
+  TOOLKIT_COMMIT: 04e9861385d7eb50c18632c6503221ebbd30f4e7
 
 jobs:
   validate:
