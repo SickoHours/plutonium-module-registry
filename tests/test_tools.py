@@ -92,6 +92,32 @@ class CheckEntriesTests(unittest.TestCase):
         self.assertTrue(any("no id" in p for p in check.compare(entry(declaration={"title": "x"}), fetched, "module")))
 
 
+class BaselineRowTests(unittest.TestCase):
+    def test_outcomes_decide_and_claims_are_checked(self):
+        e = entry()
+        passed = {"ok": True, "result": {"outcome": "passed", "blocked": False, "policy_version": 1, "tree_sha256": "a" * 64,
+                                         "findings": [], "capabilities": [], "warnings": [], "unreadable": []}}
+        row = check.baseline_row(e, passed)
+        self.assertTrue(row["ok"]); self.assertEqual(row["outcome"], "passed"); self.assertTrue(row["not_a_security_audit"])
+        review = dict(passed, result=dict(passed["result"], outcome="review-required", capabilities=[{"id": "installer", "file": "setup.ps1"}]))
+        row = check.baseline_row(e, review)
+        self.assertTrue(row["ok"], "review-required passes; the maintainer reads the rows")
+        self.assertEqual(row["capabilities"][0]["id"], "installer")
+        blocked = dict(passed, result=dict(passed["result"], outcome="needs-fixes", blocked=True,
+                                           findings=[{"id": "native-plugin", "blocking": True, "file": "bin/hook.dll"}]))
+        row = check.baseline_row(e, blocked)
+        self.assertFalse(row["ok"]); self.assertIn("native-plugin at bin/hook.dll", row["problems"][0])
+        incomplete = dict(passed, result=dict(passed["result"], outcome="incomplete", blocked=True, unreadable=["x"]))
+        self.assertFalse(check.baseline_row(e, incomplete)["ok"])
+        failed = {"ok": False, "error_code": "input_limit", "message": "too big"}
+        row = check.baseline_row(e, failed)
+        self.assertFalse(row["ok"]); self.assertEqual(row["error_code"], "input_limit")
+        claiming = entry(verification={"snapshot_status": "snapshot verified"})
+        row = check.baseline_row(claiming, review)
+        self.assertFalse(row["ok"]); self.assertIn("claims snapshot verified", row["problems"][0])
+        self.assertTrue(check.baseline_row(claiming, passed)["ok"])
+
+
 class CatalogTests(unittest.TestCase):
     def test_build_is_deterministic_and_marks_drift_only_when_a_head_was_observed(self):
         with tempfile.TemporaryDirectory() as temp:

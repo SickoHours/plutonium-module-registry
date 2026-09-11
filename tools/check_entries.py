@@ -11,11 +11,19 @@ Steps, each a row in the JSON report on stdout (exit 1 on any failure):
    ``pat module fetch <name>@<commit>`` downloads the exact snapshot and refuses a declaration
    whose ``source`` names another repository or commit; the fetched ``module.json`` or
    ``composition.json`` is then compared with the entry's declaration summary field by field.
-3. History is append-only: an entry whose ``listed.commit`` changed carries its previous listing
+3. The toolkit's static baseline runs on the fetched snapshot (``pat registry baseline``, the
+   directory that holds the entry and every member it names, with the listing's repository and
+   commit): a blocking finding (``needs-fixes``) or an unreadable tree (``incomplete``) fails the
+   check; ``review-required`` passes with its rows in the report for the maintainer to read;
+   ``passed`` is what a listing may call ``snapshot verified``. The baseline never executes
+   anything in the snapshot and is not a security audit; the report says so.
+4. History is append-only: an entry whose ``listed.commit`` changed carries its previous listing
    under ``history``; an entry present in the base and absent now is reported (removals go
    through NOTICE.md and are named in the pull request).
+5. A listing may claim ``snapshot verified`` only when this run's baseline on that snapshot is
+   ``passed``; any other claim of that status is a problem.
 
-Nothing here executes anything from a snapshot: it reads two JSON files and compares them.
+Nothing here executes anything from a snapshot: it reads JSON files, hashes and compares them.
 """
 from __future__ import annotations
 
@@ -125,6 +133,7 @@ def main() -> int:
     ap.add_argument("--registry", default="registry.json")
     ap.add_argument("--all", action="store_true", help="prove every entry, not only the changed ones")
     ap.add_argument("--no-fetch", action="store_true", help="validate and diff only; do not download snapshots")
+    ap.add_argument("--no-baseline", action="store_true", help="fetch and compare, but skip the toolkit's static baseline on each snapshot")
     args = ap.parse_args()
     path = (ROOT / args.registry).resolve()
     current = load(path.read_text(encoding="utf-8"))
@@ -166,10 +175,45 @@ def main() -> int:
                     row["ok"] = not problems
             report["steps"].append(row)
             report["ok"] &= row["ok"]
+            if not fetched.get("ok") or args.no_baseline:
+                continue
+            # The baseline scans the snapshot root (the entry and every member a pack names live
+            # under it), pinned to the listing's repository and commit.
+            snapshot_root = Path(fetched["result"]["module_dir"])
+            for _ in Path(entry.get("path", ".")).parts:
+                snapshot_root = snapshot_root.parent
+            scanned = pat(["registry", "baseline", str(snapshot_root), "--repository", entry["repository"],
+                           "--commit", entry["listed"]["commit"], "--output", str(work / f"baseline-{index:03d}")], home)
+            brow = baseline_row(entry, scanned)
+            report["steps"].append(brow)
+            report["ok"] &= brow["ok"]
         return finish(report)
     finally:
         shutil.rmtree(home, ignore_errors=True)
         shutil.rmtree(work, ignore_errors=True)
+
+
+def baseline_row(entry: dict, scanned: dict) -> dict:
+    """One report row for the baseline of one entry: the outcome decides, the rows inform."""
+    row = {"step": f"baseline {entry['name']}", "ok": False, "error_code": scanned.get("error_code"), "message": scanned.get("message")}
+    result = scanned.get("result") if scanned.get("ok") else None
+    if not isinstance(result, dict):
+        row["problems"] = ["the baseline did not run to a report; see error_code and message"]
+        return row
+    outcome = result.get("outcome")
+    row.update({"outcome": outcome, "blocked": bool(result.get("blocked")), "policy_version": result.get("policy_version"),
+                "tree_sha256": result.get("tree_sha256"), "findings": result.get("findings", []),
+                "capabilities": result.get("capabilities", []), "warnings": result.get("warnings", []),
+                "unreadable": result.get("unreadable", []), "not_a_security_audit": True})
+    problems = []
+    if outcome in ("needs-fixes", "incomplete") or row["blocked"]:
+        problems.append(f"baseline outcome {outcome}: " + "; ".join(f"{f.get('id')} at {f.get('file')}" for f in result.get("findings", []) if f.get("blocking")) or f"baseline outcome {outcome}")
+    claimed = (entry.get("verification") or {}).get("snapshot_status", "unverified")
+    if claimed == "snapshot verified" and outcome != "passed":
+        problems.append(f"the listing claims snapshot verified but the baseline is {outcome}")
+    row["problems"] = problems
+    row["ok"] = not problems
+    return row
 
 
 def finish(report: dict) -> int:
