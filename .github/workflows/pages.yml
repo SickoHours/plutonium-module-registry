@@ -1,0 +1,59 @@
+name: Publish catalog
+
+# Builds the read-only catalog from registry.json on main and deploys it to GitHub Pages. Runs
+# after every push to main and once a day, when it also reads each repository's current head so
+# an entry whose repository moved past its listed commit shows `update unverified` (the listed
+# snapshot and its status are unchanged). The build job has no write permission; only the deploy
+# step has the Pages scopes, and it deploys the artifact the build produced.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - registry.json
+      - tools/build_catalog.py
+      - .github/workflows/pages.yml
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Build (observing heads; anonymous API reads are enough at this size)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/build_catalog.py --output site --observe-heads
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

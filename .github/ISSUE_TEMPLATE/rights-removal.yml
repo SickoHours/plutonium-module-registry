@@ -1,0 +1,23 @@
+name: Rights or removal
+description: A listing points at material you own and did not license, or should be removed for another reason.
+labels:
+  - rights
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Entry name
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the listing points at, and why it should be removed
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: How a maintainer can reach you (a GitHub account is enough)
+    validations:
+      required: true

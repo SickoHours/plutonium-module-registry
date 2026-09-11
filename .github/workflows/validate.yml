@@ -1,0 +1,66 @@
+name: Validate registry
+
+# The gate for every change to registry.json. Read-only: no write permission, no secrets. It
+# installs the toolkit at a pinned commit, validates the file with `pat registry add`, fetches
+# every added or changed entry at its listed commit with `pat module fetch` (an exact snapshot,
+# hashed; nothing from it is executed) and compares the entry's declaration summary with the
+# fetched declaration. A maintainer merges a green pull request; that merge is the approval and
+# it is bound to the commit this job fetched, because the entry names it.
+
+on:
+  pull_request:
+    paths:
+      - registry.json
+      - tools/**
+      - tests/**
+      - .github/workflows/validate.yml
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Plutonium Agent Toolkit commit whose validators and fetch route this registry is checked with.
+  TOOLKIT_REPOSITORY: SickoHours/plutonium-agent-toolkit
+  TOOLKIT_COMMIT: 433da25ae0c6e81055b3b85d37a5c0673bd7313b
+
+jobs:
+  validate:
+    name: Validate and fetch changed entries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Install the toolkit at its pinned commit
+        run: python -m pip install --quiet "git+https://github.com/${TOOLKIT_REPOSITORY}@${TOOLKIT_COMMIT}"
+      - name: Registry's own tests
+        run: python -m unittest discover -s tests -v
+      - name: Validate registry.json and prove changed entries against their snapshots
+        env:
+          PAT_HOME: ${{ runner.temp }}/pat-home
+        run: |
+          set -o pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python tools/check_entries.py --base "origin/${{ github.base_ref }}" | tee "$RUNNER_TEMP/check.json"
+          else
+            python tools/check_entries.py --all | tee "$RUNNER_TEMP/check.json"
+          fi
+      - name: Catalog builds from the file
+        run: python tools/build_catalog.py --output "$RUNNER_TEMP/site"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: check-report
+          path: ${{ runner.temp }}/check.json
+          retention-days: 14

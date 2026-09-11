@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "name": "plutonium-module-registry",
+  "description": "Modules and packs for Plutonium T6 Zombies, listed by name at exact commits; the community registry the Plutonium Agent Toolkit reads",
+  "entries": [
+    {
+      "name": "sickohours/hello_zm",
+      "kind": "module",
+      "repository": "https://github.com/SickoHours/plutonium-agent-toolkit",
+      "path": "examples/hello-zm",
+      "listed": {
+        "commit": "ebae02d9765c3c0acaa495474113ccd5499934f6",
+        "at": "2026-09-11",
+        "branch": "main"
+      },
+      "distribution": "source",
+      "declaration": {
+        "id": "hello_zm",
+        "version": "0.1.0",
+        "title": "hello-zm",
+        "category": "scripts",
+        "kind": "script",
+        "tags": [
+          "example"
+        ],
+        "bases": [
+          "stock"
+        ],
+        "maps": [
+          "*"
+        ]
+      },
+      "verification": {
+        "snapshot_status": "unverified"
+      },
+      "history": []
+    },
+    {
+      "name": "sickohours/round_announcer",
+      "kind": "module",
+      "repository": "https://github.com/SickoHours/plutonium-agent-toolkit",
+      "path": "examples/hello-zm-two",
+      "listed": {
+        "commit": "ebae02d9765c3c0acaa495474113ccd5499934f6",
+        "at": "2026-09-11",
+        "branch": "main"
+      },
+      "distribution": "source",
+      "declaration": {
+        "id": "round_announcer",
+        "version": "0.1.0",
+        "title": "hello-zm-two",
+        "category": "scripts",
+        "kind": "script",
+        "tags": [
+          "example"
+        ],
+        "bases": [
+          "stock"
+        ],
+        "maps": [
+          "*"
+        ]
+      },
+      "verification": {
+        "snapshot_status": "unverified"
+      },
+      "history": []
+    },
+    {
+      "name": "sickohours/stock_hello_pack",
+      "kind": "composition",
+      "repository": "https://github.com/SickoHours/plutonium-agent-toolkit",
+      "path": "examples/hello-pack",
+      "listed": {
+        "commit": "ebae02d9765c3c0acaa495474113ccd5499934f6",
+        "at": "2026-09-11",
+        "branch": "main"
+      },
+      "distribution": "source",
+      "declaration": {
+        "id": "stock_hello_pack",
+        "title": "hello-zm plus the round announcer",
+        "category": "pack",
+        "tags": [
+          "example"
+        ],
+        "bases": [
+          "stock"
+        ],
+        "maps": [
+          "zm_transit"
+        ]
+      },
+      "verification": {
+        "snapshot_status": "unverified"
+      },
+      "history": []
+    }
+  ]
+}

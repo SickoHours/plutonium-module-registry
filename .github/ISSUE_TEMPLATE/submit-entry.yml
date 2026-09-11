@@ -1,0 +1,76 @@
+name: Submit an entry
+description: List a module or pack. A maintainer turns this into the pull request that adds it to registry.json.
+labels:
+  - submission
+body:
+  - type: input
+    id: repository
+    attributes:
+      label: Repository
+      placeholder: "https://github.com/<owner>/<repo>"
+    validations:
+      required: true
+  - type: input
+    id: path
+    attributes:
+      label: Directory inside the repository holding module.json or composition.json
+      placeholder: "."
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit to list (40 hexadecimal characters, pushed, the one you tested)
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Entry name
+      description: "<github-owner>/<module id>, lowercase; the repository must live under that owner"
+      placeholder: "someone/round_announcer"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - module
+        - composition
+    validations:
+      required: true
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Distribution
+      description: As the declaration says
+      options:
+        - source
+        - seed
+        - private
+    validations:
+      required: true
+  - type: textarea
+    id: declaration
+    attributes:
+      label: Declaration summary
+      description: Paste the id, version, title, category, kind, tags, bases and maps from module.json (or name, title, tags, base, map from composition.json)
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmations (yours, not your agent's)
+      options:
+        - label: The repository is public and the commit is pushed.
+          required: true
+        - label: The license is documented in the repository.
+          required: true
+        - label: I hold the rights to every asset in the tree, or the module is listed as private and no such asset is in the tree.
+          required: true
+        - label: The declaration's source names this repository and this commit, or names no source.
+          required: true
+        - label: I understand that listing is not a security review, certification or endorsement, and says nothing about play.
+          required: true
