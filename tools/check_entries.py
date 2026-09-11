@@ -11,10 +11,11 @@ Steps, each a row in the JSON report on stdout (exit 1 on any failure):
    ``pat module fetch <name>@<commit>`` downloads the exact snapshot and refuses a declaration
    whose ``source`` names another repository or commit; the fetched ``module.json`` or
    ``composition.json`` is then compared with the entry's declaration summary field by field.
-3. The toolkit's static baseline runs on the fetched snapshot (``pat registry baseline``, the
-   directory that holds the entry and every member it names, with the listing's repository and
-   commit): a blocking finding (``needs-fixes``) or an unreadable tree (``incomplete``) fails the
-   check; ``review-required`` passes with its rows in the report for the maintainer to read;
+3. The toolkit's static baseline (``pat registry baseline``, with the listing's repository and
+   commit) runs on the entry's own directory in the fetched snapshot: a module is its directory,
+   a pack is the smallest directory holding it and the members it names. Never the repository
+   root, which would judge a listing by files it does not ship. A blocking finding
+   (``needs-fixes``) or an unreadable tree (``incomplete``) fails the check; ``review-required`` passes with its rows in the report for the maintainer to read;
    ``passed`` is what a listing may call ``snapshot verified``. The baseline never executes
    anything in the snapshot and is not a security audit; the report says so.
 4. History is append-only: an entry whose ``listed.commit`` changed carries its previous listing
@@ -177,12 +178,9 @@ def main() -> int:
             report["ok"] &= row["ok"]
             if not fetched.get("ok") or args.no_baseline:
                 continue
-            # The baseline scans the snapshot root (the entry and every member a pack names live
-            # under it), pinned to the listing's repository and commit.
-            snapshot_root = Path(fetched["result"]["module_dir"])
-            for _ in Path(entry.get("path", ".")).parts:
-                snapshot_root = snapshot_root.parent
-            scanned = pat(["registry", "baseline", str(snapshot_root), "--repository", entry["repository"],
+            scan_root, scope = baseline_root(entry, Path(fetched["result"]["module_dir"]))
+            row["baseline_scope"] = scope
+            scanned = pat(["registry", "baseline", str(scan_root), "--repository", entry["repository"],
                            "--commit", entry["listed"]["commit"], "--output", str(work / f"baseline-{index:03d}")], home)
             brow = baseline_row(entry, scanned)
             report["steps"].append(brow)
@@ -191,6 +189,41 @@ def main() -> int:
     finally:
         shutil.rmtree(home, ignore_errors=True)
         shutil.rmtree(work, ignore_errors=True)
+
+
+def baseline_root(entry: dict, module_dir: Path) -> tuple[Path, str]:
+    """The directory the baseline scans for one entry, and how it was chosen.
+
+    What is listed is a module or a pack, not a repository. An entry that lives in a subdirectory
+    of a larger repository (every entry does, if the repository holds anything else) must be judged
+    by its own files: scanning from the repository root would report that repository's tests, CI
+    and vendored code as the module's, and would fail a listing for something it does not ship.
+
+    A module is its own directory. A pack is the smallest directory holding the pack and every
+    member it names, which is usually the directory its members sit in beside it -- never above
+    the snapshot the fetch wrote."""
+    snapshot = module_dir
+    for _ in Path(entry.get("path") or ".").parts:
+        if entry.get("path"):
+            snapshot = snapshot.parent
+    if entry.get("kind") != "composition":
+        return module_dir, "module directory"
+    members = []
+    try:
+        declared = json.loads((module_dir / "composition.json").read_text(encoding="utf-8"))
+        members = [m for m in declared.get("modules", []) if isinstance(m, str)]
+    except (OSError, ValueError):
+        return module_dir, "pack directory (its members could not be read)"
+    root = module_dir.resolve()
+    for member in members:
+        if "://" in member or Path(member).is_absolute():
+            continue            # a member named by reference is fetched on its own, not scanned here
+        resolved = (module_dir / member).resolve()
+        while root != resolved and root not in resolved.parents:
+            if root == root.parent or root == snapshot.resolve().parent:
+                return snapshot, "snapshot root (a member resolved outside the pack's tree)"
+            root = root.parent
+    return root, ("pack directory" if root == module_dir.resolve() else "pack directory and the members beside it")
 
 
 def baseline_row(entry: dict, scanned: dict) -> dict:
