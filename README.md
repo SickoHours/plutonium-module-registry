@@ -39,17 +39,21 @@ never "marketplace" (nothing is sold). Definitions: the toolkit's `CONTEXT.md`.
    if you would rather not edit JSON; a maintainer turns it into the pull request. Your agent may
    draft either, show it to you, and file it only on your explicit go.
 3. The `Validate registry` check validates the file with `pat registry add`, fetches every added or
-   changed entry at its listed commit with `pat module fetch`, and compares the entry's declaration
-   summary with the fetched declaration. A maintainer merges. That merge is the one human action,
-   bound to the exact commit the check saw.
+   changed entry at its listed commit with `pat module fetch`, compares the entry's declaration
+   summary with the fetched declaration, and runs the toolkit's static baseline
+   (`pat registry baseline`) on the snapshot: a blocking finding fails the check, capabilities are
+   shown for the maintainer to read. Run it yourself first on your directory; the same bytes give
+   the same report. A maintainer merges. That merge is the one human action, bound to the exact
+   commit the check saw.
 4. To list a newer commit, change `listed` and append the earlier listing to `history`. Listings
    are never rewritten; a module that moves repositories is a new entry.
 
 ## What a listing means
 
 A listing says what this file claimed at that commit: the repository, the commit, and a copy of
-the declaration. `verification.snapshot_status` is `unverified` until a maintainer has run the
-toolkit's static baseline on the snapshot, then `snapshot verified`; the daily catalog build marks
+the declaration. `verification.snapshot_status` is `unverified` until the toolkit's static baseline
+on that exact snapshot is `passed` in a merged check, after which a maintainer sets `snapshot
+verified` (the check refuses the claim on any other outcome); the daily catalog build marks
 an entry `update unverified` when the repository's current head has moved past the listed commit
 (the listed snapshot is unchanged; only the drift is shown). None of this is a security audit,
 certification, warranty or endorsement, and nothing here says anything about play: offline

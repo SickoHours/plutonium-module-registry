@@ -31,7 +31,8 @@ marketplace.
    explicit go.** Never file on their behalf silently, and never confirm rights on their behalf:
    the checklist is theirs to tick.
 4. Run the same checks the pull request will run before opening it:
-   `pat registry add registry.json --json` and `python tools/check_entries.py --base origin/main`.
+   `pat registry add registry.json --json`, `pat registry baseline <the directory> --output <new dir> --json`
+   on their checkout, and `python tools/check_entries.py --base origin/main`.
    A `declaration-mismatch` means their `module.json` `source` names another repository or commit;
    fix the declaration, push, list the new commit.
 
@@ -44,9 +45,11 @@ marketplace.
   `history`. A repository that moved is a new entry; retire the old one by setting
   `verification.snapshot_status` to `unverified` and noting the move in `history`, or remove it
   through the rights process in `NOTICE.md`.
-- Set `snapshot verified` only after running the toolkit's static baseline
-  (`pat registry baseline`, once released) on the fetched snapshot and reading its report yourself.
-  No model sets a status, a label or an approval here.
+- Set `snapshot verified` only when the validate check's baseline on that exact snapshot is
+  `passed` and you have read its rows; the check refuses the claim on any other outcome. A
+  `review-required` baseline lists capabilities (installers, bundled packages, Lua UI, file IO)
+  for you to read before merging; it does not block. No model sets a status, a label or an
+  approval here.
 - Never add game bytes, recordings, logs, credentials or personal paths to this repository.
 
 ## What is not here
